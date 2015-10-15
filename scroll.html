@@ -1,0 +1,800 @@
+<!-- 
+    This project works with the MIRFLICKR25000 available at: http://press.liacs.nl/mirflickr/.
+    Put the "mirflickr" in the same directory as this file. 
+
+    I am currently working on putting MIRFLICKR25000 in S3 and deploying this through AWS (Elastic Beanstalk).
+-->
+
+<!DOCTYPE html> 
+<html lang='en'>
+<head>
+	<meta charset="utf-8">
+	<script src="https://code.jquery.com/jquery-2.1.4.min.js" charset="utf-8"></script>
+	<script src="http://d3js.org/d3.v3.min.js" charset="utf-8"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lodash.js/3.10.1/lodash.min.js" charset="utf-8"></script>
+
+<style type="text/css">
+body 
+{
+    margin: 0px;
+    padding: 0px;
+    width: 100%;
+    height: 5000px;
+}
+
+#menu 
+{
+    display: inline-block;
+    float: left;
+    width: 5%;
+    height: 100%;
+}
+
+#content
+{
+    display: inline-block;
+    width: 85%;
+    height: 100%;
+}
+
+#navigator
+{
+    position: fixed;
+    top: 0px;
+    width: 100%;
+    height: 60px;
+    background-color: white;
+    z-index: 5;
+    cursor: pointer;
+}
+
+#images 
+{
+    margin-top: 50px;
+    width: 100%;    
+}
+
+img 
+{
+    display: block;
+    max-width: 100%;
+    max-height: 70%;
+    margin:0 auto;
+    z-index: 1;
+}
+
+.image-container
+{
+    position: absolute;
+    color: black;
+    text-align: center;
+}
+
+.breakpoint-container
+{
+}
+
+.breakpoint
+{
+    margin-top: 15%;
+    font-size: 100px;
+    font-family: Helvetica;
+}
+
+.runner 
+{
+    width: 100%;
+    height: 15px;
+    margin-left: 5%;
+}
+
+.nav-marker 
+{
+    position: fixed;
+    height: 15px;
+    width: 2px;
+    background-color: red;
+    z-index: 10;
+}
+
+.axis
+{
+    width: 100%;
+    height: 25px;
+    margin: auto;
+    padding-left: 20px;
+}
+
+#setupAxis 
+{
+    height: 20px
+}
+
+.runner-bar 
+{
+    height: 100%;
+    display: inline-block;
+    color: white;
+    font-size: 10px;
+}
+
+.rb1 { background-color: #333399; }
+
+.rb2 { background-color: #3399FF; }
+
+.rb3 { background-color: #3366CC; }
+
+.rb4 { background-color: #3399CC; }
+
+</style>
+
+</head>
+
+<body>
+
+<div id="menu"></div>
+<div id="content">
+    <div id="navigator">
+        <div id='setupAxis'></div>
+        <div id='runner' class='runner'>
+            <div class='nav-marker'></div>
+        </div>
+        <div id='percAxis'></div>
+    </div>
+    <div id='images'><div>
+</div>
+
+<script type="text/javascript">
+
+function main() 
+{
+    fs.calculateDimensions();
+
+    // runner
+    gb.runnerScale = fs.linearScale([0, gb.count], [0, 1000]);
+    gb.percAxisScale = fs.linearScale([0, 100], [0, 1000]);
+    gb.colorPicker = fs.randomItemDedup(gb.runnerColors);
+    fs.renderSetupAxis();
+    fs.renderRunner(gb.runnerData);
+    fs.renderPercentAxis();
+    fs.listenForTickClick();
+
+    // images
+    gb.columnLoop = fs.incrementLoop(gb.columns);
+    gb.rowThrottle = fs.incrementThrottle(gb.columns);
+    fs.createData();
+    gb.linearScale = fs.linearScale([1, gb.rowCount * gb.containerHeight], [1, gb.rowCount]);
+    fs.onscroll();
+
+    $(document).keydown( function(event) 
+    {
+        if (event.keyCode == '39')
+        {
+            // zoom out
+            $('#images').empty();
+            gb.columns += 1;
+            fs.calculateDimensions();
+            gb.columnLoop = fs.incrementLoop(gb.columns);
+            gb.rowThrottle = fs.incrementThrottle(gb.columns);
+            fs.createData();
+            gb.linearScale = fs.linearScale([1, gb.rowCount * gb.containerHeight], [1, gb.rowCount]);
+            fs.highlightImage();
+            return;
+        }
+
+        if (event.keyCode == '37')
+        {
+            // zoom in
+            $('#images').empty();
+            gb.columns -= 1;
+            fs.calculateDimensions();
+            gb.columnLoop = fs.incrementLoop(gb.columns);
+            gb.rowThrottle = fs.incrementThrottle(gb.columns);
+            fs.createData();
+            gb.linearScale = fs.linearScale([1, gb.rowCount * gb.containerHeight], [1, gb.rowCount]);
+            fs.highlightImage();
+            return;
+        }
+    });
+}
+
+var gb = 
+{
+    count: 25000,
+    data: [],
+    columns: 5,
+    rowCount: 0,
+    viewportWidth: 0,
+    viewportHeight: 0,
+    navigatorHeight: 0,
+    containerWidth: 0,
+    containerHeight: 0,
+    leftMargin: 0,
+    containerBottomBorder: 1,
+    columnLoop: null,
+    rowThrottle: null,
+    linearScale: null,
+    runnerData: 
+    [
+        {id: 0, title: 'Set 1', count: 500},
+        {id: 1, title: 'Set 2', count: 1500},
+        {id: 2, title: 'Set 3', count: 4000},
+        {id: 3, title: 'Set 4', count: 1000},
+        {id: 4, title: 'Set 5', count: 2500},
+        {id: 5, title: 'Set 6', count: 4000},
+        {id: 6, title: 'Set 7', count: 1000},
+        {id: 7, title: 'Set 8', count: 2000},
+        {id: 8, title: 'Set 9', count: 3000},
+        {id: 9, title: 'Set 10', count: 5000}
+    ],
+    runnerMargin: 0,
+    runnerScale: null,
+    percAxisScale: null,
+    runnerColors: ['rb1', 'rb2', 'rb3', 'rb4'],
+    colorPicker: null
+}
+
+var fs = 
+{
+    render: function(matches) 
+    {
+        var selection = d3.select('#images')
+          .selectAll("div.image-container")
+          .data(matches, function(o){ return o.id; });
+
+        // enter
+        var enter = selection.enter();
+        var imageContainer = enter.append("div");
+        imageContainer
+          .attr("id", function(o) { return o.id; })
+          .attr("class", function(o) { return o.containerClass(); })
+          .style('width', gb.containerWidth - 1 + 'px')
+          .style('height', gb.containerHeight - 1 + 'px')
+          .style('top', function(o) { return o.calcTop(); })
+          .style("left", function(o) { return o.calcLeft(); })
+            .append('div')
+            .text(function(o) { return o.val() })
+            .attr('class', function(o) { return o.textClass() });
+
+        // update
+        
+        // exit
+        selection.exit().remove();
+
+        return;
+    },
+
+    image: function(id, row, column) 
+    {
+        var image = 
+        {
+            id: id,
+            row: row,
+            column: column,
+            top: null,
+            left: null,
+            src: fs.mirFlickrImage(id),
+            val: function() 
+            {
+                return this.id;
+            },
+            calcTop: function() 
+            {
+                this.top = (this.row) * gb.containerHeight + gb.navigatorHeight;
+                return this.top + 'px'; 
+            },
+            calcLeft: function() 
+            {
+                this.left = (this.column) * gb.containerWidth + gb.leftMargin;
+                return this.left + 'px'; 
+            },
+            imageLoaded: function() 
+            {
+                //return;
+                var self = this;
+                fs.randomDelay(600, 1200, function() 
+                {
+                    $('#' + self.id)
+                    .empty()
+                    .append('<img src="' + self.src + '" />')
+                    .append('<span class="image-meta">' + self.src + '</span>');
+                });
+            },
+            containerClass: function() { return 'image-container'; },
+            textClass: function() { return ''; }
+        }
+
+        return image;
+    },
+
+    breakpoint: function(id, text, row, column)
+    {
+        var bp = 
+        {
+            id: 'bp' + id,
+            row: row,
+            column: column,
+            top: null,
+            left: null,
+            text: text,
+            val: function() 
+            {
+                return this.text;
+            },
+            calcTop: function() 
+            {
+                this.top = (this.row) * gb.containerHeight + gb.navigatorHeight;
+                return this.top + 'px'; 
+            },
+            calcLeft: function() 
+            {
+                this.left = (this.column) * gb.containerWidth + gb.leftMargin;
+                return this.left + 'px'; 
+            },
+            imageLoaded: function() 
+            {
+                return;
+            },
+            containerClass: function() { return 'image-container breakpoint-container'; },
+            textClass: function() { return 'breakpoint'; }
+        }
+
+        return bp;
+    },
+
+    highlightImage: function() 
+    {
+        var scrollY = window.scrollY + Math.floor(gb.viewportHeight / 2);
+        var row = gb.linearScale(scrollY);
+        var matches = [];
+        for (var i = 0; i < gb.data.length; i++) 
+        {
+            if (gb.data[i].row === row) 
+            { 
+                matches.push(gb.data[i]); 
+            }
+
+            if (gb.data[i].row === row + 1) 
+            { 
+                matches.push(gb.data[i]); 
+            }
+
+            if (gb.data[i].row === row + 2) 
+            { 
+                matches.push(gb.data[i]); 
+            }
+
+            if (gb.data[i].row === row - 1) 
+            { 
+                matches.push(gb.data[i]); 
+            }
+
+            if (gb.data[i].row === row - 2) 
+            { 
+                matches.push(gb.data[i]); 
+            }
+
+            if (gb.data[i].row === row - 3) 
+            { 
+                matches.push(gb.data[i]); 
+            }
+
+            if (gb.data[i].row === row + 3) 
+            { 
+                matches.push(gb.data[i]); 
+            }
+
+            if (gb.data[i].row === row + 4) 
+            { 
+                matches.push(gb.data[i]); 
+            }
+        }
+
+        fs.currentPosition(matches[0].id);
+        fs.render(matches);
+
+        for (var i = 0; i < matches.length; i ++)
+        {
+            matches[i].imageLoaded();
+        }
+
+        return;
+    },
+
+    createData: function() 
+    {
+        gb.data = [];
+        var percBps = fs.createPercentageBreakpoints();
+        for (var i = 1; i <= gb.count; i++)
+        {
+            if (percBps[0].index === i)
+            {
+                gb.data.push( fs.breakpoint(i, percBps.shift().val, gb.rowThrottle(), gb.columnLoop()) );
+            }
+            gb.data.push( fs.image(i, gb.rowThrottle(), gb.columnLoop()) );
+        }
+        gb.rowCount = gb.data[gb.data.length - 1].row;
+        fs.bodyHeight(gb.rowCount * gb.containerHeight);
+        return;
+    },
+
+    createPercentageBreakpoints: function() 
+    {
+        var scale = fs.linearScale([0, 100], [0, gb.count]);
+        var range = fs.range(1, 100);
+        var percBps = [];
+        for (var i = 0; i < range.length; i++)
+        {
+            percBps.push( {'val': (i + 1) + '%', index: scale(range[i])} );
+        }
+
+        return percBps;
+    },
+
+    /*
+        domain: [1, 125]
+        range: [1, 575]
+    */
+    linearScale: function(domain, range) 
+    {
+        return d3.scale.linear()
+            .domain(domain)
+            .rangeRound(range);
+    },
+
+    onscroll: function() 
+    {
+        $(window).on('scroll', _.debounce(function() 
+        {   
+            fs.highlightImage();
+            return;
+        }, 400));
+
+        if (window.scrollY === 0)
+        {
+            fs.highlightImage();
+        }
+
+        return;
+    },
+
+    calculateDimensions: function() 
+    {
+        gb.viewportWidth = $('#content').width();
+        gb.viewportHeight = $(window).height();
+        gb.containerWidth = Math.floor( gb.viewportWidth / gb.columns );
+        gb.containerHeight = gb.containerWidth;
+        gb.navigatorHeight = $('#navigator').height();
+        gb.leftMargin = $('#menu').width();
+        gb.runnerMargin = fs.removePx( $('#runner').css('margin-left') ) - 18;
+        return;
+    },
+
+    bodyHeight: function(n) 
+    {
+        $('#content').css('height', n + 'px');
+        $('#menu').css('height', n + 'px');
+        return;
+    },
+
+    /*
+        n = 5
+        0,1,2,3,4,0,1,2,3,4,0,1,2,3,4
+    */
+    incrementLoop: function(n)
+    {
+        var n = n;
+        var current = -1;
+        return function() 
+        {
+            current += 1;
+            var c = current;
+
+            if (current < n)
+            {
+                var c = current;
+            }
+            else 
+            { 
+                current = 0;
+                c = 0;
+            }
+
+            return c;
+        }
+    },
+
+    /*
+        n = 5
+        0,0,0,0,0,1,1,1,1,1,2,2,2,2,2
+    */
+    incrementThrottle: function(n)
+    {
+        var n = n,
+            current = 0,
+            count = 0;
+
+        return function() 
+        {
+            if (count < n)
+            {
+                count +=1;
+            }
+            else 
+            {
+                count = 1;
+                current += 1;
+            }
+            return current;
+        }
+    },
+
+    randomDelay: function(min, max, f)
+    {
+        window.setTimeout(f, fs.getRandomInt(min, max));
+        return;
+    },
+
+    selectRandomImage: function() 
+    {
+        var imageUrls = 
+        [
+            "IMG_6031.jpg", 
+            "IMG_6032.jpg", 
+            "IMG_6033.jpg", 
+            "IMG_6034.jpg", 
+            "IMG_6035.jpg", 
+            "IMG_6036.jpg", 
+            "IMG_6037.jpg", 
+            "IMG_6041.jpg",
+            "IMG_6046.jpg", 
+            "IMG_6047.jpg", 
+            "IMG_6469.jpg", 
+            "IMG_6470.jpg", 
+            "IMG_6471.jpg", 
+            "IMG_6472.jpg", 
+            "IMG_6473.jpg", 
+            "IMG_6474.jpg", 
+            "IMG_6475.jpg", 
+            "IMG_6476.jpg", 
+            "IMG_6477.jpg", 
+            "IMG_6478.jpg", 
+            "jon_6459.jpg", 
+            "jon_6460.jpg",
+            "jon_6466.jpg"
+        ];
+        return 'images/' + imageUrls[Math.floor(Math.random() * (imageUrls.length - 1))];
+    },
+
+    mirFlickrImage: function(n) 
+    {
+        return 'mirflickr/im' + n + '.jpg';
+    },
+
+    getRandomInt: function(min, max) 
+    {
+        return Math.floor(Math.random() * (max - min)) + min;
+    },
+
+    range: function(min, max)
+    {
+        return d3.range(min, max + 1);
+    },
+
+    // runner functions
+
+    renderRunner: function(entries) 
+    {
+        var count = 0;
+        for (var i = 0; i < entries.length; i++)
+        {
+            count += entries[i].count;
+        }
+
+        if (count < gb.count)
+        {
+            entries.push({id: 'x', title: '', count: gb.count - count});
+        }
+
+        var selection = d3.select('#runner')
+            .selectAll("div.runner-bar")
+            .data(entries, function(o) { return o.id; });
+
+        // enter
+        var enter = selection.enter();
+        var runnerBar = enter.append("div");
+        runnerBar
+            .attr('class', function() 
+            {
+                return 'runner-bar ' + gb.colorPicker();
+            })
+            .style('width', function(o)
+            {
+                return gb.runnerScale(o.count) + 'px'; 
+            });
+
+        // update
+        
+        // exit
+        selection.exit().remove();
+    },
+
+    renderPercentAxis: function() 
+    {
+        var svg = d3.select('#percAxis').append('svg')
+            .attr('class', 'axis');
+        
+        var axis = d3.svg.axis()
+            .scale(gb.runnerScale)
+            .ticks(20)
+            //.tickSubdivide(5)
+            .tickPadding(10)
+            .tickFormat(function(v) 
+            {
+                if (v >= 10000) { return Math.floor(v/1000) + 'k'; }
+                return v;
+            });
+            
+        svg.append("g")        
+          .attr("transform", function()
+          {
+            return "translate(" + gb.runnerMargin + "," + -10 + ")";
+          })
+          .call(axis);
+
+        d3.select('#percAxis path').remove();
+        d3.selectAll('#percAxis text')
+            .style('fill', '#000000')
+            .style('font-family', 'Verdana')
+            .style('font-size', '10');
+        return;
+    },
+
+    renderSetupAxis: function() 
+    {
+        var svg = d3.select('#setupAxis').append('svg')
+            .attr('class', 'axis');
+        
+        var tickValues = [];
+        var tickCount = 0;
+        for (var i = 0; i < gb.runnerData.length; i++)
+        {
+            tickCount += gb.runnerData[i].count;
+            tickValues.push(tickCount - (gb.runnerData[i].count * .5));
+        }
+
+        var axis = d3.svg.axis()
+            .scale(gb.runnerScale)
+            .tickValues(tickValues)
+            .tickFormat(function(v, i) { return 'Setup ' + i; });
+
+        svg.append("g")        
+            .attr("transform", function()
+            {
+                return "translate(" + gb.runnerMargin + "," + 0 + ")";
+            })
+            .call(axis);
+
+        d3.select('#setupAxis path').remove();
+        d3.selectAll('#setupAxis line').remove();
+
+        d3.selectAll('#setupAxis text')
+            .style('fill', '#000000')
+            .style('font-family', 'Verdana')
+            .style('font-size', '10');
+        return;
+    },
+
+    currentPosition: function(n) 
+    {
+        var left = gb.runnerScale(n) + gb.leftMargin + gb.runnerMargin + 18;
+        d3.select('.nav-marker')
+            .transition().duration(500)
+            .style('left', left + 'px');
+
+        return;
+    },
+
+    percClick: function(tickVal, index) 
+    {
+        var datum;
+        for (var i = tickVal; i < gb.data.length; i++)
+        {
+            if (gb.data[i].id === tickVal)
+            {
+                datum = gb.data[i];
+                break;
+            }
+        }
+
+        var scale = fs.linearScale([0, gb.rowCount], [0, gb.rowCount * gb.containerHeight]);
+        var y = scale( datum.row - 1 );
+        window.scrollTo(0, y);
+        return;
+    },
+
+    setupClick: function(tickVal, index)
+    {
+        var datum;
+        var count = 0;
+        for (var i = 0; i < gb.runnerData.length; i++)
+        {
+            if (count <= tickVal)
+            {
+                datum = gb.runnerData[i];
+            }
+            else 
+            {
+                count -= gb.runnerData[i-1].count;
+                break;
+            }
+            count += gb.runnerData[i].count;
+        }
+
+        fs.percClick(count, 0);
+        return;
+    },
+
+    runnerClick: function(e) 
+    {
+        //var input = Math.floor( e.clientX - gb.runnerMargin );
+        //var scale = fs.linearScale();
+        //console.log( scale(input) );
+    },
+
+    listenForTickClick: function() 
+    { 
+        d3.select('#percAxis').selectAll('.tick').on("click", fs.percClick);
+        d3.select('#setupAxis').selectAll('.tick').on("click", fs.setupClick);
+        $('.runner-bar').on("click", fs.runnerClick);
+        return;
+    },
+
+    /*
+        Returns a random item in the array and
+        ensure that an item is not give twice in
+        a row.
+    */
+    randomItemDedup: function(arr) 
+    {
+        var a = arr;
+        var last = null;
+        return function () 
+        {
+            var ret;
+            while (true)
+            {
+                ret = a[Math.floor(Math.random() * (a.length - 0)) + 0];
+                if (ret != last)
+                {
+                    break;
+                }
+            }
+            
+            last = ret;
+            return ret;
+        }
+    },
+
+    randomItem: function(arr)
+    {
+        return arr[fs.getRandomInt(0, arr.length)];
+    },
+
+    removePx: function(str)
+    {
+        if ( str.slice(str.length - 2) === 'px' )
+        {
+            return str.slice(0, str.length - 2);
+        }
+        return str;
+    }
+}
+
+
+$(document).ready(main);
+</script>
+
+</body>
+
+</html>

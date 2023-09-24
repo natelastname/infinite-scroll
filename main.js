@@ -1,10 +1,16 @@
 function main(){
     fs.calculateDimensions();
+    d3.select("#apply").on('click', function(){
+        let checked = d3.select("#check1").node().checked;
+        let type = d3.select("#item").node().value
+        let new_count = fs.getRandomInt(10, 10000);
+        console.log("TODO: handle this");
+        return;
+    });
 
     let initial_pos = $("#navigator").position().top;
     let margin = 20;
     $("#nav-marker").css("left", margin);
-
     let width = $("#progbars").width()-margin;
 
     // Make navigator follow the screen if we're scrolled down past
@@ -24,7 +30,6 @@ function main(){
     gb.percAxisScale = fs.linearScale([0, 100], [margin, width]);
     fs.renderSetupAxis();
     fs.renderPercentAxis();
-
     d3.select('#scrollbar .axis')
         .style("cursor", "pointer")
         .on("click", function(evt){
@@ -33,7 +38,7 @@ function main(){
             let click_n = gb.runnerScale.invert(mouse[0]);
             click_n = Math.min(Math.floor(click_n), gb.count);
             fs.currentPosition(click_n);
-            window.scrollTo(0, click_n / gb.columns * gb.containerHeight);
+            window.scrollTo(0,click_n /gb.columns*gb.containerHeight);
             console.log(click_n);
             return;
         });
@@ -42,8 +47,9 @@ function main(){
     gb.columnLoop = fs.incrementLoop(gb.columns);
     gb.rowThrottle = fs.incrementThrottle(gb.columns);
     fs.createData();
-    gb.linearScale = fs.linearScale([1, gb.rowCount * gb.containerHeight],
-                                    [1, gb.rowCount]);
+    let arr1 = [1, gb.rowCount*gb.containerHeight]
+    let arr2 = [1, gb.rowCount]
+    gb.linearScale = fs.linearScale(arr1, arr2);
     fs.onscroll();
 
 
@@ -57,8 +63,9 @@ function main(){
         gb.columnLoop = fs.incrementLoop(gb.columns);
         gb.rowThrottle = fs.incrementThrottle(gb.columns);
         fs.createData();
-        gb.linearScale = fs.linearScale([1, gb.rowCount * gb.containerHeight],
-                                        [1, gb.rowCount]);
+        let arr1 = [1, gb.rowCount * gb.containerHeight];
+        let arr2 = [1, gb.rowCount]
+        gb.linearScale = fs.linearScale(arr1, arr2);
         fs.highlightImage();
     }
 
@@ -71,9 +78,11 @@ function main(){
         gb.columnLoop = fs.incrementLoop(gb.columns);
         gb.rowThrottle = fs.incrementThrottle(gb.columns);
         fs.createData();
-        gb.linearScale = fs.linearScale([1, gb.rowCount * gb.containerHeight],
-                                        [1, gb.rowCount]);
+        let arr1 = [1, gb.rowCount * gb.containerHeight];
+        let arr2 = [1, gb.rowCount]
+        gb.linearScale = fs.linearScale(arr1, arr2);
         fs.highlightImage();
+
     }
 
     $(document).keydown( function(event){
@@ -159,12 +168,13 @@ var fs = {
                 return this.id;
             },
             calcTop: function() {
-                this.top = (this.row * gb.containerHeight) + $("#navigator").height();
+                this.top = (this.row * gb.containerHeight)
+                    + $("#navigator").height();
                 return this.top + 'px';
             },
             calcLeft: function() {
-                //this.left = (this.column) * gb.containerWidth + gb.leftMargin;
-                this.left = (this.column * gb.containerWidth) + $("#images").position().left;
+                this.left = (this.column * gb.containerWidth)
+                    + $("#images").position().left;
 
                 return this.left + 'px';
             },
@@ -173,9 +183,13 @@ var fs = {
                 // TODO: For what purpose???
                 var self = this;
                 fs.randomDelay(600, 1200, function(){
+
+                    let img = '<img alt="'+self.src+'" src="'
+                        +self.src+'" />';
+
                     $('#' + self.id)
                         .empty()
-                        .append('<img alt="'+self.src+'" src="' + self.src + '" />');
+                        .append(img);
 
                 });
             },
@@ -184,53 +198,45 @@ var fs = {
 
         return image;
     },
-    highlightImage: function() {
 
+    highlightImage: function() {
         let width_px = Math.floor($("#images").width()/gb.columns);
         let height_px = width_px;
         $(".image-container").css({"width": width_px+"px"})
         $(".image-container").css({"height": height_px+"px"})
-
-        //let scrollY = Math.max(0, window.scrollY - $("#images").position().top);
-        var scrollY = window.scrollY + Math.floor(gb.viewportHeight / 2);
+        var scrollY = window.scrollY+Math.floor(gb.viewportHeight/2);
         let row = gb.linearScale(scrollY);
-
         // buffer rows should equal (number of rows in one viewport)
         // Change this to tweak how far ahead/behind it loads
-        let buffer_rows = Math.floor(window.innerHeight / gb.containerHeight)*2;
+        let buffer_rows = Math.floor(window.innerHeight
+                                     / gb.containerHeight)*2;
 
         let matches = [];
         for (let i = 0; i < gb.data.length; i++) {
             let item_row = gb.data[i].row;
-            if ((item_row >= row-buffer_rows) && (item_row <= row+buffer_rows)){
+            if ((item_row >= row-buffer_rows)
+                && (item_row <= row+buffer_rows)){
                 matches.push(gb.data[i]);
             }
         }
-
         let ids = matches.map(function(item){return item.id});
         let min_id = Math.min.apply(Math, ids);
         let max_id = Math.max.apply(Math, ids);
-
         let mid_id = Math.floor((min_id + max_id) / 2);
-
-        fs.currentPosition(min_id);
+        fs.currentPosition(mid_id);
         //fs.currentPosition(matches[0].id);
         fs.render(matches);
         for(var i = 0; i < matches.length; i++) {
             matches[i].imageLoaded();
         }
-
-        //$(".image-container").css({"width": (100/gb.columns).toString() +"%" })
-        //$(".image-container").css({"height": (100/gb.columns).toString() +"%" })
-        //$("#images").css({"height": window.innerHeight+"px"})
-        //$("#images").css({"displa"})
         return;
     },
 
     createData: function(){
         gb.data = [];
         for (var i = 1; i <= gb.count; i++){
-            gb.data.push( fs.image(i, gb.rowThrottle(), gb.columnLoop()) );
+            let img = fs.image(i, gb.rowThrottle(), gb.columnLoop())
+            gb.data.push(img);
         }
         // Beware, rowCount is not the total number of rows...
         // Don't know how that happened
@@ -261,28 +267,21 @@ var fs = {
         let width_percent = (100/gb.columns).toString() +"%";
         gb.containerHeight = $("#images").width() / gb.columns;
         gb.containerWidth = gb.containerHeight;
-
         console.log("("+gb.containerWidth+","+gb.containerHeight+")");
         gb.navigatorHeight = $('#navigator').height();
-
         let str = "1fr ".repeat(gb.columns)
         $("#images").css("grid-template-columns", str);
         $("#images").css("grid-template-rows", str);
         $("#images").css("height", window.innerHeight+"px");
         gb.scrollStart = $("#nav_placeholder").position().top;
         gb.scrollStart += $("#nav_placeholder").height();
-
-
         // add 1 so that the last image isn't on the absoutle bottom.
-
         let num_rows = Math.ceil(gb.count / gb.columns) + 1;
         body_height = gb.scrollStart + (gb.containerHeight*num_rows);
         fs.bodyHeight(body_height);
-
         $("#test")
             .css("position", "absolute")
             .css("top", gb.scrollStart+"px");
-
         return;
     },
 
@@ -395,7 +394,7 @@ var fs = {
         return function (){
             var ret;
             while (true){
-                ret = a[Math.floor(Math.random() * (a.length - 0)) + 0];
+                ret = a[Math.floor(Math.random()*(a.length - 0))+0];
                 if (ret != last){
                     break;
                 }

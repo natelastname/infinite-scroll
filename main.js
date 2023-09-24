@@ -6,7 +6,8 @@ function main(){
     $("#nav-marker").css("left", margin);
     let width = $("#navigator").width()-margin;
 
-
+    // Make navigator follow the screen if we're scrolled down past
+    // wherever it started out.
     $(window).scroll(function(e){
         let elt = $('#navigator');
         let isPositionFixed = (elt.css('position') == 'fixed');
@@ -31,7 +32,7 @@ function main(){
             let click_n = gb.runnerScale.invert(mouse[0]);
             click_n = Math.min(Math.floor(click_n), gb.count);
             fs.currentPosition(click_n);
-
+            window.scrollTo(0, click_n / gb.columns * gb.containerHeight);
             console.log(click_n);
             return;
         });
@@ -40,7 +41,8 @@ function main(){
     gb.columnLoop = fs.incrementLoop(gb.columns);
     gb.rowThrottle = fs.incrementThrottle(gb.columns);
     fs.createData();
-    gb.linearScale = fs.linearScale([1, gb.rowCount * gb.containerHeight], [1, gb.rowCount]);
+    gb.linearScale = fs.linearScale([1, gb.rowCount * gb.containerHeight],
+                                    [1, gb.rowCount]);
     fs.onscroll();
 
     $(document).keydown( function(event){
@@ -48,12 +50,13 @@ function main(){
         if (event.keyCode == '39'){
             // zoom out
             $('#images').empty();
-            gb.columns += 1;
+            gb.columns = gb.columns + 1;
             fs.calculateDimensions();
             gb.columnLoop = fs.incrementLoop(gb.columns);
             gb.rowThrottle = fs.incrementThrottle(gb.columns);
             fs.createData();
-            gb.linearScale = fs.linearScale([1, gb.rowCount * gb.containerHeight], [1, gb.rowCount]);
+            gb.linearScale = fs.linearScale([1, gb.rowCount * gb.containerHeight],
+                                            [1, gb.rowCount]);
             fs.highlightImage();
             return;
         }
@@ -61,12 +64,13 @@ function main(){
         if (event.keyCode == '37'){
             // zoom in
             $('#images').empty();
-            gb.columns -= 1;
+            gb.columns = Math.max(1, gb.columns - 1);
             fs.calculateDimensions();
             gb.columnLoop = fs.incrementLoop(gb.columns);
             gb.rowThrottle = fs.incrementThrottle(gb.columns);
             fs.createData();
-            gb.linearScale = fs.linearScale([1, gb.rowCount * gb.containerHeight], [1, gb.rowCount]);
+            gb.linearScale = fs.linearScale([1, gb.rowCount * gb.containerHeight],
+                                            [1, gb.rowCount]);
             fs.highlightImage();
             return;
         }
@@ -84,6 +88,7 @@ var gb = {
     navigatorHeight: 0,
     containerWidth: 0,
     containerHeight: 0,
+    scrollStart: 0,
     leftMargin: 0,
     containerBottomBorder: 1,
     columnLoop: null,
@@ -157,8 +162,7 @@ var fs = {
                 fs.randomDelay(600, 1200, function(){
                     $('#' + self.id)
                         .empty()
-                        .append('<img src="' + self.src + '" />')
-                        .append('<span class="image-meta">' + self.src + '</span>');
+                        .append('<img alt="'+self.src+'" src="' + self.src + '" />');
 
                 });
             },
@@ -205,7 +209,7 @@ var fs = {
         //fs.currentPosition(matches[0].id);
         fs.render(matches);
         for(var i = 0; i < matches.length; i++) {
-            //matches[i].imageLoaded();
+            matches[i].imageLoaded();
         }
 
         console.log("min_id:" + min_id);
@@ -224,8 +228,10 @@ var fs = {
         for (var i = 1; i <= gb.count; i++){
             gb.data.push( fs.image(i, gb.rowThrottle(), gb.columnLoop()) );
         }
-        gb.rowCount = ($("#images").width() / gb.columns)
-        fs.bodyHeight(gb.rowCount * gb.containerHeight);
+        // Beware, rowCount is not the total number of rows...
+        // Don't know how that happened
+        gb.rowCount = ($("#images").width() / gb.columns);
+        gb.numRows = gb.data[gb.data.length - 1].row;
         return;
     },
 
@@ -259,10 +265,25 @@ var fs = {
         $("#images").css("grid-template-columns", str);
         $("#images").css("grid-template-rows", str);
         $("#images").css("height", window.innerHeight+"px");
+        gb.scrollStart = $("#nav_placeholder").position().top;
+        gb.scrollStart += $("#nav_placeholder").height();
+
+
+        // add 1 so that the last image isn't on the absoutle bottom.
+
+        let num_rows = Math.ceil(gb.count / gb.columns) + 1;
+        body_height = gb.scrollStart + (gb.containerHeight*num_rows);
+        fs.bodyHeight(body_height);
+
+        $("#test")
+            .css("position", "absolute")
+            .css("top", gb.scrollStart+"px");
+
         return;
     },
 
     bodyHeight: function(n) {
+        console.log("Body height: " + n);
         $('#content').css('height', n + 'px');
         $('#menu').css('height', n + 'px');
         return;
@@ -352,10 +373,6 @@ var fs = {
             .style('fill', '#000000')
             .style('font-family', 'Verdana')
             .style('font-size', '10');
-
-
-
-
         return;
     },
     renderSetupAxis: function(){
@@ -366,19 +383,6 @@ var fs = {
         d3.select('#nav-marker')
             .transition().duration(500)
             .style('left', left + 'px');
-        return;
-    },
-    percClick: function(tickVal, index){
-        var datum;
-        for (var i = tickVal; i < gb.data.length; i++){
-            if (gb.data[i].id === tickVal){
-                datum = gb.data[i];
-                break;
-            }
-        }
-        var scale = fs.linearScale([0, gb.rowCount], [0, gb.rowCount * gb.containerHeight]);
-        var y = scale( datum.row - 1 );
-        window.scrollTo(0, y);
         return;
     },
     randomItemDedup: function(arr){

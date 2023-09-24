@@ -4,7 +4,8 @@ function main(){
     let initial_pos = $("#navigator").position().top;
     let margin = 20;
     $("#nav-marker").css("left", margin);
-    let width = $("#navigator").width()-margin;
+
+    let width = $("#progbars").width()-margin;
 
     // Make navigator follow the screen if we're scrolled down past
     // wherever it started out.
@@ -45,33 +46,45 @@ function main(){
                                     [1, gb.rowCount]);
     fs.onscroll();
 
+
+    function zoom_out(){
+        // zoom out
+        $('#images').empty();
+        // It will eventually break if you zoom out too far.
+        // The solution is "don't do that."
+        gb.columns = gb.columns + 1;
+        fs.calculateDimensions();
+        gb.columnLoop = fs.incrementLoop(gb.columns);
+        gb.rowThrottle = fs.incrementThrottle(gb.columns);
+        fs.createData();
+        gb.linearScale = fs.linearScale([1, gb.rowCount * gb.containerHeight],
+                                        [1, gb.rowCount]);
+        fs.highlightImage();
+    }
+
+    function zoom_in(){
+        // zoom in
+        $('#images').empty();
+        // It doesn't behave correctly with 1 col
+        gb.columns = Math.max(2, gb.columns - 1);
+        fs.calculateDimensions();
+        gb.columnLoop = fs.incrementLoop(gb.columns);
+        gb.rowThrottle = fs.incrementThrottle(gb.columns);
+        fs.createData();
+        gb.linearScale = fs.linearScale([1, gb.rowCount * gb.containerHeight],
+                                        [1, gb.rowCount]);
+        fs.highlightImage();
+    }
+
     $(document).keydown( function(event){
         // KP_6
         if (event.keyCode == '39'){
-            // zoom out
-            $('#images').empty();
-            gb.columns = gb.columns + 1;
-            fs.calculateDimensions();
-            gb.columnLoop = fs.incrementLoop(gb.columns);
-            gb.rowThrottle = fs.incrementThrottle(gb.columns);
-            fs.createData();
-            gb.linearScale = fs.linearScale([1, gb.rowCount * gb.containerHeight],
-                                            [1, gb.rowCount]);
-            fs.highlightImage();
+            zoom_in();
             return;
         }
         // KP_4
         if (event.keyCode == '37'){
-            // zoom in
-            $('#images').empty();
-            gb.columns = Math.max(1, gb.columns - 1);
-            fs.calculateDimensions();
-            gb.columnLoop = fs.incrementLoop(gb.columns);
-            gb.rowThrottle = fs.incrementThrottle(gb.columns);
-            fs.createData();
-            gb.linearScale = fs.linearScale([1, gb.rowCount * gb.containerHeight],
-                                            [1, gb.rowCount]);
-            fs.highlightImage();
+            zoom_out();
             return;
         }
     });
@@ -181,15 +194,10 @@ var fs = {
         //let scrollY = Math.max(0, window.scrollY - $("#images").position().top);
         var scrollY = window.scrollY + Math.floor(gb.viewportHeight / 2);
         let row = gb.linearScale(scrollY);
-        console.log("==============================");
-        console.log("ScrollY:"+scrollY);
-        console.log("Row: "+row);
 
         // buffer rows should equal (number of rows in one viewport)
         // Change this to tweak how far ahead/behind it loads
         let buffer_rows = Math.floor(window.innerHeight / gb.containerHeight)*2;
-
-        console.log("Buffer_rows: "+buffer_rows);
 
         let matches = [];
         for (let i = 0; i < gb.data.length; i++) {
@@ -211,10 +219,6 @@ var fs = {
         for(var i = 0; i < matches.length; i++) {
             matches[i].imageLoaded();
         }
-
-        console.log("min_id:" + min_id);
-        console.log("min_id:" + mid_id);
-        console.log("max_id:" + max_id);
 
         //$(".image-container").css({"width": (100/gb.columns).toString() +"%" })
         //$(".image-container").css({"height": (100/gb.columns).toString() +"%" })
